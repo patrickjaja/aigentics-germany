@@ -1,0 +1,41 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Sensitive data
+*.pem
+*.key
+credentials.txt
+server-credentials.txt
+
+# Docker volumes (will be created on server)
+infrastructure/hetzner/poste/
+infrastructure/hetzner/traefik/acme.json
+infrastructure/hetzner/nginx/html/*
+!infrastructure/hetzner/nginx/html/index.html

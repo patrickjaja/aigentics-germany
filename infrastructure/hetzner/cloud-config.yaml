@@ -1,0 +1,119 @@
+#cloud-config
+
+# Update packages on first boot
+package_update: true
+package_upgrade: true
+
+# Install required packages
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - fail2ban
+  - ufw
+  - unattended-upgrades
+  - git
+
+# Create docker group
+groups:
+  - docker
+
+# Add user to docker group
+users:
+  - default
+  - name: root
+    groups: docker
+
+# Configure automatic security updates
+write_files:
+  - path: /etc/apt/apt.conf.d/50unattended-upgrades
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+          "${distro_id}ESMApps:${distro_codename}-apps-security";
+          "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::MinimalSteps "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+  
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+      APT::Periodic::Unattended-Upgrade "1";
+
+  - path: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = 3600
+      findtime = 600
+      maxretry = 3
+      
+      [sshd]
+      enabled = true
+      port = 22
+      
+      [postfix]
+      enabled = true
+      port = smtp,ssmtp
+      
+      [dovecot]
+      enabled = true
+      port = pop3,pop3s,imap,imaps
+
+# Run commands on first boot
+runcmd:
+  # Install Docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+  - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  
+  # Configure UFW firewall
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw allow 25/tcp
+  - ufw allow 587/tcp
+  - ufw allow 993/tcp
+  - ufw allow 465/tcp
+  - ufw allow 110/tcp
+  - ufw allow 995/tcp
+  - ufw allow 143/tcp
+  - echo "y" | ufw enable
+  
+  # Start fail2ban
+  - systemctl enable fail2ban
+  - systemctl start fail2ban
+  
+  # Create docker network
+  - docker network create web
+  
+  # Create directories for docker volumes
+  - mkdir -p /opt/docker/{traefik,poste,nginx,data}
+  - mkdir -p /opt/docker/traefik/acme
+  - touch /opt/docker/traefik/acme/acme.json
+  - chmod 600 /opt/docker/traefik/acme/acme.json
+  
+  # Set kernel parameters for mail server
+  - echo "net.ipv6.conf.all.disable_ipv6 = 0" >> /etc/sysctl.conf
+  - echo "net.ipv6.conf.default.disable_ipv6 = 0" >> /etc/sysctl.conf
+  - echo "net.ipv6.conf.lo.disable_ipv6 = 0" >> /etc/sysctl.conf
+  - sysctl -p
+  
+  # Download setup script
+  - curl -o /root/setup-docker.sh https://raw.githubusercontent.com/patrickjaja/aigentics-germany/main/infrastructure/hetzner/setup-docker.sh || echo "Setup script will be created manually"
+  - chmod +x /root/setup-docker.sh || true
+
+# Configure hostname
+hostname: mail.aigentics-germany.de
+
+# Final message
+final_message: "Cloud-init completed. Docker and basic security are configured. Please run /root/setup-docker.sh to complete the setup."
